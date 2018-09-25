@@ -15,20 +15,21 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.events.RCTEventEmitter;
-import com.facebook.react.views.imagehelper.ImageSource;
 
-public class FastImageRequestListener implements RequestListener<Drawable> {
-    static final String REACT_ON_ERROR_EVENT = "onFastImageError";
-    static final String REACT_ON_LOAD_EVENT = "onFastImageLoad";
-    static final String REACT_ON_LOAD_END_EVENT = "onFastImageLoadEnd";
+import static com.dylanvann.fastimage.FastImageRequestListener.REACT_ON_ERROR_EVENT;
+import static com.dylanvann.fastimage.FastImageRequestListener.REACT_ON_LOAD_END_EVENT;
+import static com.dylanvann.fastimage.FastImageRequestListener.REACT_ON_LOAD_EVENT;
+import static com.dylanvann.fastimage.FastImageViewManager.sendEventToJS;
 
+public class BitmapRequestListaner implements RequestListener<Bitmap> {
     private String key;
 
-    FastImageRequestListener(String key) {
+    BitmapRequestListaner(String key) {
         this.key = key;
     }
 
-    private static WritableMap mapFromResource(Drawable drawable, ThemedReactContext context) {
+    private static WritableMap mapFromResource(Bitmap bitmap, ThemedReactContext context) {
+        Drawable drawable = new BitmapDrawable(context.getResources(), bitmap);
         WritableMap resourceData = new WritableNativeMap();
         resourceData.putInt("width", drawable.getIntrinsicWidth());
         resourceData.putInt("height", drawable.getIntrinsicHeight());
@@ -36,34 +37,31 @@ public class FastImageRequestListener implements RequestListener<Drawable> {
     }
 
     @Override
-    public boolean onLoadFailed(@android.support.annotation.Nullable GlideException e, Object model, Target<Drawable>  target, boolean isFirstResource) {
+    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap>  target, boolean isFirstResource) {
         FastImageOkHttpProgressGlideModule.forget(key);
         if (!(target instanceof ImageViewTarget)) {
             Log.e(getClass().getName(), "onLoadFailed " + e.toString());
             return false;
         }
         FastImageViewWithUrl view = (FastImageViewWithUrl) ((ImageViewTarget) target).getView();
-        ThemedReactContext context = (ThemedReactContext) view.getContext();
-        RCTEventEmitter eventEmitter = context.getJSModule(RCTEventEmitter.class);
-        int viewId = view.getId();
-        eventEmitter.receiveEvent(viewId, REACT_ON_ERROR_EVENT, new WritableNativeMap());
-        eventEmitter.receiveEvent(viewId, REACT_ON_LOAD_END_EVENT, new WritableNativeMap());
+        sendEventToJS(view, REACT_ON_ERROR_EVENT, new WritableNativeMap());
+        sendEventToJS(view, REACT_ON_LOAD_END_EVENT, new WritableNativeMap());
         return false;
     }
 
     @Override
-    public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+    public boolean onResourceReady(Bitmap bitmap, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
         if (!(target instanceof ImageViewTarget)) {
-            Log.e(getClass().getName(), "onResourceReady " + resource.toString());
+            Log.e(getClass().getName(), "onResourceReady " + bitmap.toString());
             return false;
         }
         FastImageViewWithUrl view = (FastImageViewWithUrl) ((ImageViewTarget) target).getView();
+        view.setImageBitmap(bitmap);
         ThemedReactContext context = (ThemedReactContext) view.getContext();
-        RCTEventEmitter eventEmitter = context.getJSModule(RCTEventEmitter.class);
-        int viewId = view.getId();
-        eventEmitter.receiveEvent(viewId, REACT_ON_LOAD_EVENT, mapFromResource(resource, context));
-        eventEmitter.receiveEvent(viewId, REACT_ON_LOAD_END_EVENT, new WritableNativeMap());
+        sendEventToJS(view, REACT_ON_LOAD_EVENT, mapFromResource(bitmap, context));
+        sendEventToJS(view, REACT_ON_LOAD_END_EVENT, new WritableNativeMap());
         return false;
     }
+
 
 }

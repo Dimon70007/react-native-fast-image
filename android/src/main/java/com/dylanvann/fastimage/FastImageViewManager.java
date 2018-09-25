@@ -1,8 +1,14 @@
 package com.dylanvann.fastimage;
 
+import android.graphics.Bitmap;
+import android.support.annotation.NonNull;
+import android.util.Log;
+
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.load.model.GlideUrl;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeMap;
@@ -31,6 +37,13 @@ class FastImageViewManager extends SimpleViewManager<FastImageViewWithUrl> imple
     private static final String REACT_ON_PROGRESS_EVENT = "onFastImageProgress";
     private static final Map<String, List<FastImageViewWithUrl>> VIEWS_FOR_URLS = new WeakHashMap<>();
     private RequestManager requestManager = null;
+
+    static void sendEventToJS(FastImageViewWithUrl view, String reactEventName, WritableMap writableNativeMap) {
+        ThemedReactContext context = (ThemedReactContext) view.getContext();
+        RCTEventEmitter eventEmitter = context.getJSModule(RCTEventEmitter.class);
+        int viewId = view.getId();
+        eventEmitter.receiveEvent(viewId, reactEventName,  writableNativeMap);
+    }
 
     @Override
     public String getName() {
@@ -73,21 +86,34 @@ class FastImageViewManager extends SimpleViewManager<FastImageViewWithUrl> imple
             VIEWS_FOR_URLS.put(key, newViewsForKeys);
         }
 
-        ThemedReactContext context = (ThemedReactContext) view.getContext();
-        RCTEventEmitter eventEmitter = context.getJSModule(RCTEventEmitter.class);
-        int viewId = view.getId();
-        eventEmitter.receiveEvent(viewId, REACT_ON_LOAD_START_EVENT, new WritableNativeMap());
-
+        sendEventToJS(view, REACT_ON_LOAD_START_EVENT, new WritableNativeMap());
 
         final String stringUrl = glideUrl.toString();
+        Log.e(getName(),"glideUrl " + stringUrl);
+        if(stringUrl.contains(".mp4")) {
+            requestVideoFrame(source, view, glideUrl, key);
+        } else {
+            requestManager
+            .load(stringUrl.startsWith("http") ? glideUrl : stringUrl)
+            // todo: use width and height as params from react
+            .apply(FastImageViewConverter.getOptions(source, 240*16/9,240))
+                    .thumbnail(/*sizeMultiplier=*/ 0.1f)
+                    .listener(new FastImageRequestListener(key))
+            .into(view);
+        }
+    }
+
+    void requestVideoFrame(ReadableMap source, final FastImageViewWithUrl view, GlideUrl glideUrl, String key) {
+        final String stringUrl = glideUrl.toString();
         requestManager
-                // This will make this work for remote and local images. e.g.
-                //    - file:///
-                //    - content://
-                //    - data:image/png;base64
                 .load(stringUrl.startsWith("http") ? glideUrl : stringUrl)
-                .apply(FastImageViewConverter.getOptions(source))
+                // todo: use width and height as params from react
+                .apply(FastImageViewConverter.getOptions(source, 240*16/9,240))
+                .thumbnail(0.1f)
                 .listener(new FastImageRequestListener(key))
+
+//                .listener(new BitmapRequestListener(key, view, this))
+//                .submit();
                 .into(view);
     }
 
@@ -148,5 +174,6 @@ class FastImageViewManager extends SimpleViewManager<FastImageViewWithUrl> imple
     public float getGranularityPercentage() {
         return 0.5f;
     }
+
 
 }

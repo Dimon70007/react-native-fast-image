@@ -6,10 +6,14 @@ import android.graphics.drawable.Drawable;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
 
+import com.bumptech.glide.Glide;
 import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.DecodeFormat;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.load.model.LazyHeaders;
+import com.bumptech.glide.load.resource.bitmap.VideoBitmapDecoder;
 import com.bumptech.glide.request.RequestOptions;
 import com.facebook.react.bridge.JSApplicationIllegalArgumentException;
 import com.facebook.react.bridge.NoSuchKeyException;
@@ -27,6 +31,7 @@ class FastImageViewConverter {
                 put("immutable", FastImageCacheControl.IMMUTABLE);
                 put("web", FastImageCacheControl.WEB);
                 put("cacheOnly", FastImageCacheControl.CACHE_ONLY);
+                put("result", FastImageCacheControl.RESULT);
             }};
 
     private static final Map<String, Priority> FAST_IMAGE_PRIORITY_MAP =
@@ -67,6 +72,10 @@ class FastImageViewConverter {
     }
 
     static RequestOptions getOptions(ReadableMap source) {
+        return getOptions(source,0,0);
+    }
+
+    static RequestOptions getOptions(ReadableMap source, int width, int height) {
         // Get priority.
         final Priority priority = FastImageViewConverter.getPriority(source);
         // Get cache control method.
@@ -79,17 +88,27 @@ class FastImageViewConverter {
                 // If using none then OkHttp integration should be used for caching.
                 diskCacheStrategy = DiskCacheStrategy.NONE;
                 skipMemoryCache = true;
+                break;
             case CACHE_ONLY:
                 onlyFromCache = true;
+                break;
             case IMMUTABLE:
                 // Use defaults.
         }
-        return new RequestOptions()
+        RequestOptions ro =  new RequestOptions()
                 .diskCacheStrategy(diskCacheStrategy)
                 .onlyRetrieveFromCache(onlyFromCache)
+                .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                 .skipMemoryCache(skipMemoryCache)
                 .priority(priority)
-                .placeholder(TRANSPARENT_DRAWABLE);
+                .placeholder(TRANSPARENT_DRAWABLE)
+                .format(DecodeFormat.PREFER_RGB_565);
+        if(width > 0 && height > 0) {
+            return ro.override(width, height)
+                    .frame(0)
+                    .centerCrop();
+        }
+        return ro;
     }
 
     private static FastImageCacheControl getCacheControl(ReadableMap source) {
